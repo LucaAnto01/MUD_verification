@@ -1,0 +1,68 @@
+/*
+    Theory MUD File signature verification
+    Author: Antognarelli Luca
+    AA: 2024/2025
+*/
+
+theory MUD_File_signature
+/*
+    Legenda:
+        M: MUD Manager
+        S: MUD File Server
+*/
+
+begin
+
+/*
+    Import signing theory models
+    https://github.com/tamarin-prover/tamarin-prover/blob/develop/examples/Tutorial.spthy
+*/
+builtins: signing
+
+/*Macros for reusable constructs */
+macros: request(url) = <M, url>
+
+/*Rule that models the registration of a public/private key pair for an entity A */
+rule Register_pk:
+    [ Fr(~ltkA) ] //ltkA is a private, unique, and freshly generated term
+    -->
+    [ !Ltk($A, ~ltkA), !Pk($A, pk(~ltkA)), //Persistent fact (!) for: asserts that A owns the private key ltkA & asserts that public key corresponding to lrkA is associated with A
+        Out(pk(~ltkA)) //Make publicly available the pk (output to the public/network)
+    ]
+
+/*Rule that models the sending of request to th MUD File Server */
+rule M_Send_Request:
+    [ !Ltk(M, ltkM), !Pk(S, pkS) ]
+    --[ Send(M, request("request_url")) ]-> //Event that indicate M has sent a message with the request URL
+    [ Out(request("request_url")) ]
+
+/*Rule that models the checking if the MUD File Server has the MUD File requested */
+rule S_Process_Request:
+    let mud_file = <"mud_file_content"> in //Content sent by the Server
+    [ !Ltk(S, ltkS), !Pk(M, pkM), In(request("request_url")) ]
+    --[ Recv(S, request("request_url")) ]-> //Event that indicate S has received the request fom M
+    [ Out(<mud_file, sign(mud_file, ltkS)>) ] //Send the MUD File content signed using the ltkS
+
+/*Rule that models the verification of the singed MUD File from the MUD Manager */
+rule M_Verify_Response:
+    [ !Ltk(M, ltkM), !Pk(S, pkS), In(<mud_file, sig>) ]
+    --[ Recv(M, mud_file), Eq(verify(sig, mud_file, pkS), true) ]-> //The verification MUST succed
+    [ Authentic(S, mud_file) ]
+
+/*Rule that models the compromise of an agent's sk */
+rule Reveal_ltk:
+    [ !Ltk(A, ltkA) ] 
+    --[ Reveal(A) ]-> 
+    [ Out(ltkA) ]
+
+restriction Equality:
+    "All x y #i. Eq(x,y) @i ==> x = y" //Enforcing correctness in verification
+
+/*Lemma that demonstrates the protocol can execute the communication */
+lemma executable:
+    exists-trace
+    "Ex M S request mud_file #i #j #k. 
+        Send(M, request)@i & 
+        Recv(S, request)@j & 
+        Recv(M, mud_file)@k"
+end
