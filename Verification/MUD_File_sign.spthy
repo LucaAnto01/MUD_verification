@@ -41,8 +41,8 @@ rule S_Process_Request:
 /*Rule that models the verification of the signed MUD File from the MUD Manager */
 rule M_Verify_Response:
     [ !Ltk(M, ltkM), !Pk(S, pkS), In(<mud_file, sig>) ]
-    --[ Recv(M, mud_file), Eq(verify(sig, mud_file, pkS), true) ]-> // The verification MUST succeed
-    [ Authentic(S, mud_file) ] // The verification has succeeded and the mud_file is authentic
+    --[ Recv(M, mud_file), Eq(verify(sig, mud_file, pkS), true), Honest(M), Honest(S), Authentic(S, mud_file) ]-> // The verification MUST succeed
+    [ St_FileVerified(S, mud_file) ] // The verification has succeeded and the mud_file is authentic
 
 /*Rule that models the compromise of an agent's sk */
 rule Reveal_ltk:
@@ -60,4 +60,11 @@ lemma executable:
         ((Send(M, request_url) @ #i) & 
         (Recv(S, request_url) @ #j)) & 
         (Recv(M, mud_file) @ #k)"
+
+lemma message_authentication:
+    "All b m #i. Authentic(b,m) @i
+        ==> (Ex #j. Send(b,m) @j & j<i)
+            | (Ex B #r. Reveal(B)@r & Honest(B) @i & r < i)"
 end
+
+//TODO: START FROM THE SCRIPT IN THE MUD file for the non_forgery part
