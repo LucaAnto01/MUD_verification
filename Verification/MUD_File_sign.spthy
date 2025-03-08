@@ -9,6 +9,7 @@ theory MUD_File_signature
     Legenda:
         M: MUD Manager
         S: MUD File Server
+        R: Router
 */
 begin
 
@@ -44,6 +45,18 @@ rule M_Verify_Response:
     --[ Recv(M, mud_file), Eq(verify(sig, mud_file, pkS), true), Honest(M), Honest(S), Authentic(S, mud_file) ]-> // The verification MUST succeed
     [ St_FileVerified(S, mud_file) ] // The verification has succeeded and the mud_file is authentic
 
+/*MUD Manager sends a configuration string after successful verification */
+rule M_Send_Configuration:
+    [ St_FileVerified(M, mud_file), Fr(configuration) ] // Declare configuration
+    --[ Send(M, configuration) ]-> //M sends the configuration
+    [ Out(configuration) ] //Send the configuration
+
+/*Router receives and stores the configuration */
+rule R_Store_Configuration:
+    [ In(configuration) ]
+    --[ Recv($R, configuration), Stored($R, configuration) ]-> // Router receives the configuration
+    [ St_ConfigurationStored($R, configuration) ] // Router stores the configuration
+
 /*Rule that models the compromise of an agent's sk */
 rule Reveal_ltk:
     [ !Ltk(A, ltkA) ] 
@@ -65,6 +78,20 @@ lemma message_authentication:
     "All b m #i. Authentic(b,m) @i
         ==> (Ex #j. Send(b,m) @j & j<i)
             | (Ex B #r. Reveal(B)@r & Honest(B) @i & r < i)"
-end
 
-//TODO: START FROM THE SCRIPT IN THE MUD file for the non_forgery part
+lemma full_execution:
+    exists-trace
+    "Ex M S R request_url mud_file configuration #i #j #k #l #m.
+        ((Send(M, request_url) @ #i) & 
+        (Recv(S, request_url) @ #j)) & 
+        (Recv(M, mud_file) @ #k) & 
+        (Send(M, configuration) @ #l) & 
+        (Recv(R, configuration) @ #m)"
+
+lemma configuration_authentication:
+    "All R c #i. Stored(R, c) @ i
+        ==> (Ex M #k. (Send(M, c) @ k & k < i & 
+                        (Ex m #j. Authentic(M, m) @ j & j < k)))
+            | (Ex B #r. Reveal(B) @ r & Honest(B) @ i & r < i)"    
+        
+end
