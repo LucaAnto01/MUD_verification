@@ -1,5 +1,5 @@
 /*
-    Theory MUD File signature verification
+    Theory MUD Protocol verification
     Author: Antognarelli Luca
     AA: 2024/2025
 */
@@ -64,7 +64,7 @@ rule Reveal_ltk:
     [ Out(ltkA) ]
 
 restriction Equality:
-    "All x y #i. Eq(x,y) @i ==> x = y" // Enforcing correctness in verification
+    "All x y #i. Eq(x,y) @i ==> x = y" //Enforcing correctness in verification
 
 /*Lemma that demonstrates the protocol can execute the communication */
 lemma executable:
@@ -74,11 +74,14 @@ lemma executable:
         (Recv(S, request_url) @ #j)) & 
         (Recv(M, mud_file) @ #k)"
 
+/*Lemma that ensures that if a message m is marked as Authentic from entity b at time #i, 
+    then one of the following conditions must be true */
 lemma message_authentication:
     "All b m #i. Authentic(b,m) @i
-        ==> (Ex #j. Send(b,m) @j & j<i)
-            | (Ex B #r. Reveal(B)@r & Honest(B) @i & r < i)"
+        ==> (Ex #j. Send(b,m) @j & j<i) //message m was sent by b at some earlier time #j
+            | (Ex B #r. Reveal(B)@r & Honest(B) @i & r < i)" //OR B has its sk compromised before #i
 
+/*Lemma that ensures that the entire protocol executes successfully --> guarantees the existence of a valid trace*/
 lemma full_execution:
     exists-trace
     "Ex M S R request_url mud_file configuration #i #j #k #l #m.
@@ -88,9 +91,11 @@ lemma full_execution:
         (Send(M, configuration) @ #l) & 
         (Recv(R, configuration) @ #m)"
 
+/*Lemma that ensures that only properly authenticated configurations are stored by R 
+    If a configuration c is stored by R at time #i then one of the following must be true*/
 lemma configuration_authentication:
     "All R c #i. Stored(R, c) @ i
-        ==> (Ex M sig #k. (Send(M, <c, sig>) @ k & k < i & 
+        ==> (Ex M sig #k. (Send(M, <c, sig>) @ k & k < i & //M sent the configuration with a valid signature
                 (Ex m #j. Authentic(M, m) @ j & j < k & VerifySig(M, c, sig) @ k)))"
                     
 end
