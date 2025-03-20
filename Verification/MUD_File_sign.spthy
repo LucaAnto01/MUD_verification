@@ -29,33 +29,33 @@ rule Register_pk:
 
 /*Rule that models the sending of request to the MUD File Server */
 rule M_Send_Request:
-    [ !Ltk(M, ltkM), !Pk(S, pkS), Fr(request_url) ] // Include request_url as a fresh term
-    --[ Send(M, request_url) ]-> // Event that indicates M has sent a message with the request URL
-    [ Out(request_url) ] // Output the request_url
+    [ !Ltk(M, ltkM), !Pk(S, pkS), Fr(request_url) ] //Include request_url as a fresh term
+    --[ Send(M, request_url) ]-> //Event that indicates M has sent a message with the request URL
+    [ Out(request_url) ] //Output the request_url
 
 /*Rule that models the checking if the MUD File Server has the MUD File requested */
 rule S_Process_Request:
-    [ !Ltk(S, ltkS), !Pk(M, pkM), In(request_url), Fr(mud_file) ] // Declare mud_file as a fresh term
-    --[ Recv(S, request_url) ]-> // Event that indicates S has received the request from M
-    [ Out(<mud_file, sign(mud_file, ltkS)>) ] // Send the MUD File content signed using the ltkS
+    [ !Ltk(S, ltkS), !Pk(M, pkM), In(request_url), Fr(mud_file) ] //Declare mud_file as a fresh term
+    --[ Recv(S, request_url) ]-> //Event that indicates S has received the request from M
+    [ Out(<mud_file, sign(mud_file, ltkS)>) ] //Send the MUD File content signed using the ltkS
 
 /*Rule that models the verification of the signed MUD File from the MUD Manager */
 rule M_Verify_Response:
     [ !Ltk(M, ltkM), !Pk(S, pkS), In(<mud_file, sig>) ]
-    --[ Recv(M, mud_file), Eq(verify(sig, mud_file, pkS), true), Honest(M), Honest(S), Authentic(S, mud_file) ]-> // The verification MUST succeed
-    [ St_FileVerified(S, mud_file) ] // The verification has succeeded and the mud_file is authentic
+    --[ Recv(M, mud_file), Eq(verify(sig, mud_file, pkS), true), Honest(M), Honest(S), Authentic(S, mud_file) ]-> //The verification MUST succeed
+    [ St_FileVerified(S, mud_file) ] //The verification has succeeded and the mud_file is authentic
 
 /*MUD Manager sends a configuration string after successful verification */
 rule M_Send_Configuration:
-    [ St_FileVerified(M, mud_file), Fr(configuration) ] // Declare configuration
-    --[ Send(M, configuration) ]-> //M sends the configuration
-    [ Out(configuration) ] //Send the configuration
+    [ St_FileVerified(M, mud_file), Fr(configuration), !Ltk(M, ltkM) ] //Declare configuration
+    --[ Send(M, <configuration, sign(configuration, ltkM)>) ]-> //M sends the configuration
+    [ Out(<configuration, sign(configuration, ltkM)>) ] //Send the configuration
 
 /*Router receives and stores the configuration */
 rule R_Store_Configuration:
-    [ In(configuration) ]
-    --[ Recv($R, configuration), Stored($R, configuration) ]-> // Router receives the configuration
-    [ St_ConfigurationStored($R, configuration) ] // Router stores the configuration
+    [ In(<configuration, sig>), !Pk(M, pkM) ]
+    --[ Recv($R, configuration), Eq(verify(sig, configuration, pkM), true), Stored($R, configuration), VerifySig(M, configuration, sig) ]-> //Router receives the configuration
+    [ St_ConfigurationStored($R, configuration) ] //Router stores the configuration
 
 /*Rule that models the compromise of an agent's sk */
 rule Reveal_ltk:
@@ -90,8 +90,7 @@ lemma full_execution:
 
 lemma configuration_authentication:
     "All R c #i. Stored(R, c) @ i
-        ==> (Ex M #k. (Send(M, c) @ k & k < i & 
-                        (Ex m #j. Authentic(M, m) @ j & j < k)))
-            | (Ex B #r. Reveal(B) @ r & Honest(B) @ i & r < i)"    
-        
+        ==> (Ex M sig #k. (Send(M, <c, sig>) @ k & k < i & 
+                (Ex m #j. Authentic(M, m) @ j & j < k & VerifySig(M, c, sig) @ k)))"
+                    
 end
